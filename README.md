@@ -42,7 +42,7 @@ To build on **OSX** without X11:
 
 To build on **OSX with X11** (e.g. from XQuartz):
 
-	PKG_CONFIG_PATH=/opt/X11/lib/pkgconfig ./autogen.sh --prefix=YOUR_PREFIX
+	PKG_CONFIG_PATH=/usr/local/lib/pkgconfig:/opt/X11/lib/pkgconfig ./autogen.sh --prefix=YOUR_PREFIX
 	make
 
 To build on **Linux**:
