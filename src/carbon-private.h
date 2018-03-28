@@ -24,5 +24,7 @@
 #define __CARBON_PRIVATE_H__
 
 void gdip_get_display_dpi_carbon (float *h_dpi, float *v_dpi);
+void gdip_get_fontfamily_details_from_ctfont (CTFontRef ctfont, short *ascent, short *descent, short *linespacing, short *units_per_em);
+GpStatus gdip_carbon_register_font (unsigned char *path);
 
 #endif

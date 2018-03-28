@@ -37,9 +37,16 @@
 
 #include "gdiplus-private.h"
 
+typedef struct CTFont *CTFontRef;
+
 #ifdef USE_PANGO_RENDERING
-	#include <pango/pangofc-font.h>
+	#define PANGO_ENABLE_BACKEND
+	#define __CARBON__
+	#include <pango/pango.h>
 	#include <pango/pangocairo.h>
+	#include <pango/pangofc-font.h>
+	#include <pango/pangofc-fontmap.h>
+	#include <pango/pangocoretext.h>
 #endif
 
 struct _Font {

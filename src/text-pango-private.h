@@ -31,7 +31,8 @@
 
 #ifdef USE_PANGO_RENDERING
 
-#include <pango/pangocairo.h>
+#define PANGO_ENABLE_BACKEND
+#include <pango/pango.h>
 #include <ctype.h>
 #include "graphics-private.h"
 #include "stringformat-private.h"

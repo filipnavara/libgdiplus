@@ -34,6 +34,7 @@
 #include "fontcollection-private.h"
 #include "fontfamily-private.h"
 #include "graphics-private.h"
+#include "carbon-private.h"
 
 /* Generic fonts families */
 #if GLIB_CHECK_VERSION(2,32,0)
@@ -162,6 +163,7 @@ GdipPrivateAddFontFile (GpFontCollection *font_collection, GDIPCONST WCHAR *file
 {
 	BYTE *file;
 	FILE *fileHandle;
+	GpStatus status = Ok;
 	
 	if (!font_collection || !filename)
 		return InvalidParameter;
@@ -177,10 +179,22 @@ GdipPrivateAddFontFile (GpFontCollection *font_collection, GDIPCONST WCHAR *file
 	}
 
 	fclose (fileHandle);
+	
+#if USE_PANGO_RENDERING && __APPLE__
+	PangoFontMap *map = pango_cairo_font_map_get_default ();
+	if (!PANGO_IS_FC_FONT_MAP (map)) {
+		GpStatus status = gdip_carbon_register_font (file);
+		// Tell Pango to throw away the current FontMap and create a new one. This
+		// has the effect of registering the new font in Pango by re-looking up all
+		// font families.
+		if (status == Ok)
+  			pango_cairo_font_map_set_default (NULL);
+	}
+#endif
 	FcConfigAppFontAddFile (font_collection->config, file);
     
 	GdipFree (file);
-	return Ok;
+	return status;
 }
 
 GpStatus WINGDIPAPI
@@ -705,8 +719,14 @@ PangoFontDescription*
 gdip_get_pango_font_description (GpFont *font)
 {
 	if (!font->pango) {
-		font->pango = pango_font_description_from_string ((char*)font->face);
-		pango_font_description_set_size (font->pango, font->emSize * PANGO_SCALE);
+		PangoFontMap *map = pango_cairo_font_map_get_default ();
+
+		font->pango = pango_font_description_new ();
+		pango_font_description_set_family (font->pango, (char *)font->face);
+		if (PANGO_IS_FC_FONT_MAP (map) && font->unit == UnitPoint)
+			pango_font_description_set_size (font->pango, font->emSize * PANGO_SCALE);
+		else // Workaround for CoreText backend which incorrectly interprets point sizes
+			pango_font_description_set_absolute_size (font->pango, font->sizeInPixels * PANGO_SCALE);
 
 		if (font->style & FontStyleBold)
 			pango_font_description_set_weight (font->pango, PANGO_WEIGHT_BOLD);
@@ -721,7 +741,7 @@ static GpStatus
 gdip_get_fontfamily_details (GpFontFamily *family, FontStyle style)
 {
 	GpFont *font = NULL;
-	GpStatus status = GdipCreateFont (family, 8.0f, style, UnitPoint, &font);
+	GpStatus status = GdipCreateFont (family, 10.0f, style, UnitPoint, &font);
 
 	if ((status == Ok) && font) {
 		PangoFontMap *map = pango_cairo_font_map_get_default (); /* owned by pango */
@@ -732,13 +752,20 @@ gdip_get_fontfamily_details (GpFontFamily *family, FontStyle style)
 #endif
 		PangoFont *pf = pango_font_map_load_font (map, context, gdip_get_pango_font_description (font));
 
-		FT_Face face = pango_fc_font_lock_face ((PangoFcFont*)pf);
-		if (face) {
-			gdip_get_fontfamily_details_from_freetype (family, face);
-
-			pango_fc_font_unlock_face ((PangoFcFont*)pf);
+		if (PANGO_IS_FC_FONT (pf)) {
+			FT_Face face = pango_fc_font_lock_face ((PangoFcFont*)pf);
+			if (face) {
+				gdip_get_fontfamily_details_from_freetype (family, face);
+				pango_fc_font_unlock_face ((PangoFcFont*)pf);
+			} else {
+				status = FontFamilyNotFound;
+			}
+		} else if (PANGO_IS_CORE_TEXT_FONT (pf)) {
+			const PangoFontDescription *desc = pango_font_describe (pf);
+			CTFontRef ctfont = pango_core_text_font_get_ctfont ((PangoCoreTextFont *)pf);
+			gdip_get_fontfamily_details_from_ctfont (ctfont, &family->cellascent, &family->celldescent, &family->linespacing, &family->height);
 		} else {
-			status = FontFamilyNotFound;
+			status = FontFamilyNotFound;			
 		}
 
 		g_object_unref (context);
