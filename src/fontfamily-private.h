@@ -39,7 +39,10 @@
 
 struct _FontFamily {
 	struct _FontCollection *collection;
+#if 0	
 	FcPattern*	pattern;
+#endif
+	void		*backend_font_family;
 	BOOL		allocated;
 	short 		height;
 	short 		linespacing;

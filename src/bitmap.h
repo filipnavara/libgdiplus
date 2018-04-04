@@ -47,7 +47,7 @@ GpStatus WINGDIPAPI GdipCreateHICONFromBitmap (GpBitmap* bitmap, HICON *hbmRetur
 
 GpStatus WINGDIPAPI GdipCreateBitmapFromResource (HINSTANCE hInstance, GDIPCONST WCHAR *lpBitmapName, GpBitmap** bitmap);
 
-GpStatus WINGDIPAPI GdipBitmapLockBits (GpBitmap *bitmap, GDIPCONST Rect *rect, UINT flags, PixelFormat format, BitmapData *lockedBitmapData);
+GpStatus WINGDIPAPI GdipBitmapLockBits (GpBitmap *bitmap, GDIPCONST GpRect *rect, UINT flags, PixelFormat format, BitmapData *lockedBitmapData);
 GpStatus WINGDIPAPI GdipBitmapUnlockBits (GpBitmap *bitmap, BitmapData *lockedBitmapData);
 
 GpStatus WINGDIPAPI GdipBitmapSetPixel (GpBitmap *bitmap, INT x, INT y, ARGB color);

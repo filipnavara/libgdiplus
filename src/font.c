@@ -34,6 +34,7 @@
 #include "fontcollection-private.h"
 #include "fontfamily-private.h"
 #include "graphics-private.h"
+#include <wchar.h>
 
 /* Generic fonts families */
 #if GLIB_CHECK_VERSION(2,32,0)
@@ -48,6 +49,29 @@ static int ref_familySerif = 0;
 static int ref_familySansSerif = 0;
 static int ref_familyMonospace = 0;
 
+void *gdip_coretext_NewInstalledFontCollection ();
+void *gdip_coretext_NewPrivateFontCollection ();
+void gdip_coretext_DeleteFontCollection (void *ct_font_collection);
+void gdip_coretext_GetFontCollectionFamilyList (void *ct_font_collection, void ***ct_familes, int *num_families);
+char *gdip_coretext_GetFamilyName (void *ct_font_descriptor);
+GpStatus gdip_coretext_AddFontFile (void **ct_font_collection, char *filename);
+GpStatus gdip_coretext_AddMemoryFont (void **ct_font_collection, const void *memory, int length);
+void *gdip_coretext_CloneFontFamily (void *ct_font_descriptor);
+void gdip_coretext_DeleteFontFamily (void *ct_font_descriptor);
+cairo_font_face_t *gdip_coretext_get_cairo_font_face (void *ct_font_descriptor, FontStyle style);
+GpStatus gdip_coretext_get_fontfamily_details (void *ct_font_descriptor, FontStyle style, short *cellascent, short *celldescent, short *linespacing, short *em_size);
+
+#define gdip_font_NewInstalledFontCollection gdip_coretext_NewInstalledFontCollection
+#define gdip_font_NewPrivateFontCollection gdip_coretext_NewPrivateFontCollection
+#define gdip_font_DeleteFontCollection gdip_coretext_DeleteFontCollection
+#define gdip_font_GetFontCollectionFamilyList gdip_coretext_GetFontCollectionFamilyList
+#define gdip_font_GetFamilyName gdip_coretext_GetFamilyName
+#define gdip_font_AddFontFile gdip_coretext_AddFontFile
+#define gdip_font_AddMemoryFont gdip_coretext_AddMemoryFont
+#define gdip_font_CloneFontFamily gdip_coretext_CloneFontFamily
+#define gdip_font_DeleteFontFamily gdip_coretext_DeleteFontFamily
+#define gdip_font_get_cairo_font_face gdip_coretext_get_cairo_font_face
+#define gdip_font_get_fontfamily_details gdip_coretext_get_fontfamily_details
 
 /* Family and collections font functions */
 static void
@@ -57,7 +81,7 @@ gdip_fontfamily_init (GpFontFamily *fontFamily)
 	fontFamily->linespacing = -1;
 	fontFamily->celldescent = -1;
 	fontFamily->cellascent = -1;
-	fontFamily->pattern = NULL;
+	fontFamily->backend_font_family = NULL;
 	fontFamily->allocated = FALSE;
 }
 
@@ -93,6 +117,7 @@ GdipNewInstalledFontCollection (GpFontCollection **font_collection)
 	 * (b) other libgdiplus structures depends on that allocated data;
 	 */
 	if (!system_fonts) {
+#if 0		
 		FcObjectSet *os = FcObjectSetBuild (FC_FAMILY, FC_FOUNDRY, NULL);
 		FcPattern *pat = FcPatternCreate ();
 		FcValue val;
@@ -118,6 +143,18 @@ GdipNewInstalledFontCollection (GpFontCollection **font_collection)
 #if USE_PANGO_RENDERING
 		system_fonts->pango_font_map = pango_cairo_font_map_new_for_font_type (CAIRO_FONT_TYPE_FT);
 #endif
+#endif
+		system_fonts = (GpFontCollection *) GdipAlloc (sizeof (GpFontCollection));
+		if (!system_fonts)
+			return OutOfMemory;
+
+		system_fonts->backend_font_families = NULL;
+		system_fonts->backend_font_collection = gdip_font_NewInstalledFontCollection ();
+		if (!system_fonts->backend_font_collection) {
+			GdipFree (system_fonts);
+			system_fonts = NULL;
+			return OutOfMemory;
+		}
 	}
 
 	*font_collection = system_fonts;
@@ -137,6 +174,7 @@ GdipNewPrivateFontCollection (GpFontCollection **font_collection)
 	if (!result)
 		return OutOfMemory;
 
+#if 0
 	result->fontset = NULL;
 	result->config = FcConfigCreate ();
 
@@ -144,6 +182,14 @@ GdipNewPrivateFontCollection (GpFontCollection **font_collection)
 	result->pango_font_map = pango_cairo_font_map_new_for_font_type (CAIRO_FONT_TYPE_FT);
 	pango_fc_font_map_set_config ((PangoFcFontMap *)result->pango_font_map, result->config);
 #endif
+#endif
+
+	result->backend_font_families = NULL;
+	result->backend_font_collection = gdip_font_NewPrivateFontCollection ();
+	if (!result->backend_font_collection) {
+		GdipFree (result);
+		return OutOfMemory;
+	}
 
 	*font_collection = result;
 	return Ok;
@@ -157,6 +203,7 @@ GdipDeletePrivateFontCollection (GpFontCollection **font_collection)
 		return InvalidParameter;
 
 	if (*font_collection) {
+#if 0
 #if USE_PANGO_RENDERING
 		if ((*font_collection)->pango_font_map != NULL) {
 			g_object_unref ((*font_collection)->pango_font_map);
@@ -171,6 +218,10 @@ GdipDeletePrivateFontCollection (GpFontCollection **font_collection)
 			FcConfigDestroy ((*font_collection)->config);
 			(*font_collection)->config = NULL;
 		}
+#endif
+		if ((*font_collection)->backend_font_families != NULL)
+			GdipFree ((*font_collection)->backend_font_families);
+		gdip_font_DeleteFontCollection ((*font_collection)->backend_font_collection);
 		GdipFree ((void *)*font_collection);
 	}
 
@@ -181,6 +232,7 @@ GdipDeletePrivateFontCollection (GpFontCollection **font_collection)
 GpStatus WINGDIPAPI
 GdipPrivateAddFontFile (GpFontCollection *font_collection, GDIPCONST WCHAR *filename)
 {
+#if 0
 	BYTE *file;
 	FILE *fileHandle;
 	
@@ -201,7 +253,27 @@ GdipPrivateAddFontFile (GpFontCollection *font_collection, GDIPCONST WCHAR *file
 	FcConfigAppFontAddFile (font_collection->config, file);
     
 	GdipFree (file);
-	return Ok;
+#endif
+	GpStatus status;
+	char *utf8_filename;
+
+	if (!font_collection || !filename)
+		return InvalidParameter;
+    
+	utf8_filename = g_utf16_to_utf8 (filename, -1, NULL, NULL, NULL);
+	if (!utf8_filename)
+		return OutOfMemory;
+
+	status = gdip_font_AddFontFile (&font_collection->backend_font_collection, utf8_filename);
+	GdipFree (utf8_filename);
+
+	// Clear the cache
+	if (status == Ok && font_collection->backend_font_families != NULL) {
+		GdipFree (font_collection->backend_font_families);
+		font_collection->backend_font_families = NULL;
+	}
+
+	return status;
 }
 
 GpStatus WINGDIPAPI
@@ -222,10 +294,8 @@ GdipCloneFontFamily (GpFontFamily *fontFamily, GpFontFamily **clonedFontFamily)
 	result->celldescent = fontFamily->celldescent;
 	result->cellascent = fontFamily->cellascent;
 
-	if (fontFamily->pattern) {
-		result->pattern = FcPatternDuplicate (fontFamily->pattern);
-		result->allocated = TRUE;
-	}
+	result->backend_font_family = gdip_font_CloneFontFamily (fontFamily->backend_font_family);
+	result->allocated = TRUE;
 
 	*clonedFontFamily = result;
 	return Ok;
@@ -276,9 +346,15 @@ GdipDeleteFontFamily (GpFontFamily *fontFamily)
 #endif
 	
 	if (delete) {
+#if 0		
 		if (fontFamily->allocated) {
 			FcPatternDestroy (fontFamily->pattern);
 			fontFamily->pattern = NULL;
+		}
+#endif
+		if (fontFamily->allocated) {
+			gdip_font_DeleteFontFamily (fontFamily->backend_font_family);
+			fontFamily->backend_font_family = NULL;
 		}
 		GdipFree (fontFamily);
 	}
@@ -286,6 +362,7 @@ GdipDeleteFontFamily (GpFontFamily *fontFamily)
 	return Ok;
 }
 
+#if 0
 static void
 gdip_createPrivateFontSet (GpFontCollection *font_collection)
 {
@@ -301,6 +378,7 @@ gdip_createPrivateFontSet (GpFontCollection *font_collection)
 
 	font_collection->fontset = col;
 }
+#endif
 
 GpStatus WINGDIPAPI
 GdipGetFontCollectionFamilyCount (GpFontCollection *font_collection, INT *numFound)
@@ -308,6 +386,7 @@ GdipGetFontCollectionFamilyCount (GpFontCollection *font_collection, INT *numFou
 	if (!font_collection  || !numFound)
 		return InvalidParameter;
 
+#if 0
 	if (font_collection->config)
 		gdip_createPrivateFontSet (font_collection);
 
@@ -315,6 +394,15 @@ GdipGetFontCollectionFamilyCount (GpFontCollection *font_collection, INT *numFou
 		*numFound = font_collection->fontset->nfont;
 	else
 		*numFound = 0;
+#endif
+	if (font_collection->backend_font_families == NULL) {
+		gdip_font_GetFontCollectionFamilyList (
+			font_collection->backend_font_collection,
+			&font_collection->backend_font_families,
+			&font_collection->font_family_count);
+	}
+
+	*numFound = font_collection->font_family_count;
 
 	return Ok;
 }
@@ -327,10 +415,18 @@ GdipGetFontCollectionFamilyList (GpFontCollection *font_collection, INT num_soug
 	if (!font_collection || !gpfamilies || !num_found)
 		return InvalidParameter;
 
+#if 0
 	if (font_collection->config)
 		gdip_createPrivateFontSet (font_collection);
+#endif
+	if (font_collection->backend_font_families == NULL) {
+		gdip_font_GetFontCollectionFamilyList (
+			font_collection->backend_font_collection,
+			&font_collection->backend_font_families,
+			&font_collection->font_family_count);
+	}
 
-	for (i = 0; i < num_sought && i < font_collection->fontset->nfont; i++) {
+	for (i = 0; i < num_sought && i < /*font_collection->fontset->nfont*/font_collection->font_family_count; i++) {
 		gpfamilies[i] = gdip_fontfamily_new ();
 		if (!gpfamilies[i]) {
 			while (--i >= 0) {
@@ -340,7 +436,11 @@ GdipGetFontCollectionFamilyList (GpFontCollection *font_collection, INT num_soug
 			return OutOfMemory;
 		}
 
+#if 0
 		gpfamilies[i]->pattern = font_collection->fontset->fonts[i];
+		gpfamilies[i]->allocated = FALSE;
+#endif
+		gpfamilies[i]->backend_font_family = font_collection->backend_font_families[i];
 		gpfamilies[i]->allocated = FALSE;
 	}
 	
@@ -348,6 +448,7 @@ GdipGetFontCollectionFamilyList (GpFontCollection *font_collection, INT num_soug
 	return Ok;  
 }
 
+#if 0
 static GpStatus
 gdip_status_from_fontconfig (FcResult result)
 {
@@ -362,7 +463,9 @@ gdip_status_from_fontconfig (FcResult result)
 		return GenericError;
 	}
 }
+#endif
 
+#if 0
 /* note: MUST be executed inside a lock because FcConfig isn't thread-safe */
 static FcPattern*
 create_pattern_from_name (char* name)
@@ -496,10 +599,12 @@ gdip_font_clear_pattern_cache (void)
 	g_static_mutex_unlock (&patterns_mutex);
 #endif
 }
+#endif
 
 static GpStatus
-create_fontfamily_from_collection (char* name, GpFontCollection *font_collection, GpFontFamily **fontFamily)
+create_fontfamily_from_collection (char *name, GpFontCollection *font_collection, GpFontFamily **fontFamily)
 {
+#if 0
 	/* note: fontset can be NULL when we supply an empty private collection */
 	if (font_collection->fontset) {
 		int i;
@@ -527,6 +632,36 @@ create_fontfamily_from_collection (char* name, GpFontCollection *font_collection
 		}
 	}
 	return FontFamilyNotFound;
+#endif
+	int i;
+	char *family_name;
+
+	if (font_collection->backend_font_families == NULL) {
+		gdip_font_GetFontCollectionFamilyList (
+			font_collection->backend_font_collection,
+			&font_collection->backend_font_families,
+			&font_collection->font_family_count);
+	}
+
+	for (i = 0; i < font_collection->font_family_count; i++) {
+		family_name = gdip_font_GetFamilyName (font_collection->backend_font_families[i]);
+		if (strcmp (family_name, name) == 0) {			
+			GpFontFamily *result = gdip_fontfamily_new ();
+			GdipFree (family_name);
+			if (!result)
+				return OutOfMemory;
+
+			result->backend_font_family = font_collection->backend_font_families[i];
+			result->allocated = FALSE;
+			result->collection = font_collection;
+
+			*fontFamily = result;
+			return Ok;
+		}
+		GdipFree (family_name);
+	}
+
+	return FontFamilyNotFound;
 }
 
 // coverity[+alloc : arg-*2]
@@ -539,6 +674,7 @@ GdipCreateFontFamilyFromName (GDIPCONST WCHAR *name, GpFontCollection *font_coll
 	if (!name || !fontFamily)
 		return InvalidParameter;
 
+#if 0
 	string = (char*)ucs2_to_utf8 ((const gunichar2 *)name, -1);
 	if (!string)
 		return OutOfMemory;
@@ -551,14 +687,24 @@ GdipCreateFontFamilyFromName (GDIPCONST WCHAR *name, GpFontCollection *font_coll
 	} else {
 		status = create_fontfamily_from_name (string, fontFamily);
 	}
+#endif
+	if (!font_collection) {
+		status = GdipNewInstalledFontCollection (&font_collection);
+		if (status != Ok)
+			return status;
+	}
 
+	string = g_utf16_to_utf8 (name, -1, NULL, NULL, NULL);
+	status = create_fontfamily_from_collection (string, font_collection, fontFamily);
 	GdipFree (string);
+
 	return status;
 }
 
 GpStatus WINGDIPAPI
 GdipGetFamilyName (GDIPCONST GpFontFamily *family, WCHAR name[LF_FACESIZE], LANGID language)
 {
+#if 0	
 	GpStatus status;
 	FcChar8 *fc_str;
 	FcResult r;
@@ -575,6 +721,22 @@ GdipGetFamilyName (GDIPCONST GpFontFamily *family, WCHAR name[LF_FACESIZE], LANG
 		return status;
 
 	utf8_to_ucs2((const gchar *)fc_str, (gunichar2 *)name, LF_FACESIZE);
+	return Ok;
+#endif
+	char *string;
+
+	if (!family)
+		return InvalidParameter;
+	if (!name) // ??
+		return Ok;
+
+	string = gdip_font_GetFamilyName (family->backend_font_family);
+	if (string == NULL)
+		return OutOfMemory;
+
+	utf8_to_ucs2((const gchar *)string, (gunichar2 *)name, LF_FACESIZE);
+	GdipFree (string);
+
 	return Ok;
 }
 
@@ -792,6 +954,7 @@ cairo_font_face_t*
 gdip_get_cairo_font_face (GpFont *font)
 {
 	if (!font->cairofnt) {
+#if 0
 		FcPattern *pattern = FcPatternBuild (
 			FcPatternDuplicate (font->family->pattern),
 			FC_SLANT,  FcTypeInteger, ((font->style & FontStyleItalic) ? FC_SLANT_ITALIC : FC_SLANT_ROMAN), 
@@ -801,6 +964,10 @@ gdip_get_cairo_font_face (GpFont *font)
 		font->cairofnt = cairo_ft_font_face_create_for_pattern (pattern);
 		cairo_font_face_reference (font->cairofnt);
 		FcPatternDestroy (pattern);
+#else
+		font->cairofnt = gdip_coretext_get_cairo_font_face (font->family->backend_font_family, font->style);
+		cairo_font_face_reference (font->cairofnt);
+#endif
 	}
 	return font->cairofnt;
 }
@@ -808,6 +975,7 @@ gdip_get_cairo_font_face (GpFont *font)
 static GpStatus
 gdip_get_fontfamily_details (GpFontFamily *family, FontStyle style)
 {
+#if 0
 	GpFont *font = NULL;
 	GpStatus status = GdipCreateFont (family, 0.1f, style, UnitPoint, &font);
 
@@ -849,6 +1017,15 @@ gdip_get_fontfamily_details (GpFontFamily *family, FontStyle style)
 	if (font)
 		GdipDeleteFont (font);
 	return status;
+#endif
+	gdip_coretext_get_fontfamily_details (
+		family->backend_font_family,
+		style,
+		&family->cellascent,
+		&family->celldescent,
+		&family->linespacing,
+		&family->height);
+	return Ok;
 }
 #endif
 
@@ -937,10 +1114,12 @@ GdipCreateFont (GDIPCONST GpFontFamily* family, REAL emSize, INT style, Unit uni
 	if (!family || !font || unit == UnitDisplay || unit < UnitWorld || unit > UnitCairoPoint)
 		return InvalidParameter;
 
+#if 0
 	r = FcPatternGetString (family->pattern, FC_FAMILY, 0, &str);
 	status = gdip_status_from_fontconfig (r);
 	if (status != Ok)
 		return status;
+#endif
 	
 	sizeInPixels = gdip_unit_conversion (unit, UnitPixel, gdip_get_display_dpi(), gtMemoryBitmap, emSize);
 		
@@ -950,13 +1129,14 @@ GdipCreateFont (GDIPCONST GpFontFamily* family, REAL emSize, INT style, Unit uni
 
 	result->sizeInPixels = sizeInPixels;
 
-	result->face = GdipAlloc(strlen((char *)str) + 1);
+	result->face = (unsigned char *)gdip_font_GetFamilyName (family->backend_font_family);
+	//GdipAlloc(strlen((char *)str) + 1);
 	if (!result->face) {
 		GdipFree(result);
 		return OutOfMemory;
 	}
 
-	memcpy(result->face, str, strlen((char *)str) + 1);
+	//memcpy(result->face, str, strlen((char *)str) + 1);
 
 	result->style = style;
 	result->emSize = emSize;
@@ -1297,12 +1477,31 @@ GdipPrivateAddMemoryFont(GpFontCollection *fontCollection, GDIPCONST void *memor
 	close (f);
 #endif
 
-	FcConfigAppFontAddFile (fontCollection->config, fontfile);
+	return gdip_font_AddFontFile (&fontCollection->backend_font_collection, fontfile);
+	//FcConfigAppFontAddFile (fontCollection->config, fontfile);
 	/* FIXME - May we delete our temporary font file or does 
 	   FcConfigAppFontAddFile just reference our file?  */
 	/* unlink(fontfile); */
 
-	return Ok;
+	//return Ok;
+#if 0
+	GpStatus status;
+
+	if (!fontCollection || !memory)
+		return InvalidParameter;
+	if (length <= 0)
+		return InvalidParameter;
+
+	status = gdip_font_AddMemoryFont (&fontCollection->backend_font_collection, memory, length);
+
+	// Clear the cache
+	if (status == Ok && fontCollection->backend_font_families != NULL) {
+		GdipFree (fontCollection->backend_font_families);
+		fontCollection->backend_font_families = NULL;
+	}
+
+	return status;
+#endif
 }
 
 GpStatus WINGDIPAPI

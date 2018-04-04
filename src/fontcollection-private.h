@@ -38,8 +38,11 @@
 #include "gdiplus-private.h"
 
 struct _FontCollection {
-	FcFontSet*	fontset;
-	FcConfig*	config;		/* Only for private collections */
+	//FcFontSet*	fontset;
+	//FcConfig*	config;		/* Only for private collections */
+	void *backend_font_collection;
+	int font_family_count;
+	void **backend_font_families;
 #ifdef USE_PANGO_RENDERING
 	PangoFontMap*	pango_font_map;
 #endif

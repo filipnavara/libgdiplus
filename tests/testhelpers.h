@@ -85,6 +85,7 @@ ATTRIBUTE_USED static WCHAR* wcharFromChar(const char *c)
 
 #define assertEqualInt(actual, expected)                   \
 {                                                          \
+    printf ("LN: %d\n", __LINE__); \
     if ((int)actual != (int)expected)                      \
     {                                                      \
         fprintf (stderr, "Expected: %d\n", (int)expected); \

@@ -157,7 +157,7 @@ void gdip_process_bitmap_attributes (GpBitmap *bitmap, void **dest, GpImageAttri
 ColorPalette* gdip_create_greyscale_palette (int num_colors) GDIP_INTERNAL;
 
 typedef struct {
-	Rect		region;
+	GpRect		region;
 	int		x, y;			/* the offset of the next byte that will be loaded, once the buffer is depleted */
 	unsigned short	buffer;
 	int		p;			/* index of pixel within 'buffer' that was returned by the last call to gdip_pixel_stream_get_next () */

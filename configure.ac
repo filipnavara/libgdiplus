@@ -451,6 +451,14 @@ else
 fi
 AM_CONDITIONAL(HAVE_LIBEXIF, test x$libexif_pkgconfig = xyes)
 
+case $host_os in
+  darwin*)
+	# On solaris 10 x86, gcc prints a warning saying 'visibility attribute not supported on this configuration; ignored', but linking fails.
+	HOST_DARWIN=yes
+esac
+
+AM_CONDITIONAL(USE_FONT_CORETEXT, test x$HOST_DARWIN == xyes)
+
 GDIPLUS_PKG_LIBS="$GDIPLUS_LIBS"
 GDIPLUS_PKG_CFLAGS="$GDIPLUS_CFLAGS"
  
@@ -470,6 +478,7 @@ tests/Makefile])
 echo "---"
 echo "Configuration summary"
 echo ""
+echo "   * host_os = $host_os"
 echo "   * Installation prefix = $prefix"
 echo "   * Cairo = $cairo_info"
 echo "   * Text = $text_v"

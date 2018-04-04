@@ -115,6 +115,11 @@ libgdiplus_la_SOURCES = \
 	wmfcodec.c			\
 	wmfcodec.h
 
+if USE_FONT_CORETEXT
+libgdiplus_la_SOURCES += \
+	font-coretext.c
+endif
+
 if USE_PANGO_RENDERING
 libgdiplus_la_SOURCES += \
 	text-pango.c			\
