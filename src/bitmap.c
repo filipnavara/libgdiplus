@@ -640,6 +640,7 @@ gdip_bitmap_clone (GpBitmap *bitmap, GpBitmap **clonedbitmap)
 		return OutOfMemory;
 	}
 
+	/* Ensure we are not copying stale data */
 	gdip_bitmap_flush_surface (bitmap);
 
 	/* Copy simple types */
